@@ -18,10 +18,9 @@ header {
 }
 
 .navbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 15px;
 }
 
@@ -33,12 +32,14 @@ header {
   cursor: pointer;
   line-height: 1;
   padding: 4px 8px;
+  justify-self: end;
 }
 
 .top-buttons {
   display: none;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 6px;
   background: #e9ecef;
   padding: 12px;
@@ -319,6 +320,81 @@ select {
   color: #0056b3;
   text-decoration: none;
   font-weight: bold;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 11px;
+  margin-top: 10px;
+  border-radius: 7px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+/* ===== قائمة المستخدم (الأيقونة والدروب داون) ===== */
+#authNavArea {
+  display: none;
+  align-items: center;
+  justify-self: start;
+}
+
+.user-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.user-avatar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: white;
+  color: #007bff;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.user-avatar-btn:hover {
+  background: #e9ecef;
+}
+
+.user-dropdown {
+  display: none;
+  position: absolute;
+  top: 46px;
+  right: 0;
+  left: auto;
+  max-width: calc(100vw - 40px);
+  background: white;
+  color: #222;
+  border-radius: 10px;
+  box-shadow: 0 0 14px rgba(0,0,0,.2);
+  padding: 14px;
+  width: 220px;
+  z-index: 1000;
+  text-align: center;
+}
+
+.user-dropdown.active {
+  display: block;
+}
+
+.user-dropdown-name {
+  margin: 0 0 4px;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.user-dropdown-email {
+  margin: 0 0 12px;
+  font-weight: normal;
+  font-size: 13px;
+  color: #555;
 }
 
 footer {
