@@ -10,6 +10,8 @@
 
 <header class="navbar">
 
+    <div id="authNavArea"></div>
+
     <div class="logo-box">
         ❖ قَــطُــوف ❖
     </div>
@@ -22,7 +24,7 @@
     <button onclick="location.href='index.html'">الرئيسية</button>
     <button onclick="location.href='saved.html'">المحفوظ</button>
     <button>تواصل معنا</button>
-    <button id="authNavBtn" onclick="openAuthModal()">تسجيل الدخول</button>
+    <button id="loginBtnStatic" onclick="openAuthModal()">تسجيل الدخول</button>
 </div>
 
 <div class="filters">
@@ -48,11 +50,23 @@
   </div>
 </div>
 
-<script src="script.js"></script>
-<script>
-  renderSavedPage();
-  updateAuthButton();
-</script>
+<!-- ===== نافذة تعديل بيانات الحساب ===== -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeEditModal()">✕</button>
+    <h3>تعديل البيانات</h3>
+    <form onsubmit="handleEditSave(event)">
+      <input class="edit-input" type="text" id="editName" placeholder="الاسم">
+      <input class="edit-input" type="email" id="editEmail" placeholder="الإيميل">
+      <input class="edit-input" type="password" id="editPassword" placeholder="كلمة سر جديدة (اختياري)">
+      <input class="edit-input" type="password" id="editCurrentPassword" placeholder="كلمة السر الحالية (لو هتغيّر الإيميل أو كلمة السر)">
+      <p class="auth-error" id="editError"></p>
+      <button type="submit" class="auth-submit-btn">حفظ التعديلات</button>
+    </form>
+  </div>
+</div>
+
+<script type="module" src="script.js"></script>
 
 </body>
 </html>
