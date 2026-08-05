@@ -1,3 +1,97 @@
+// ===== Firebase =====
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  updateEmail,
+  updatePassword,
+  sendPasswordResetEmail,
+  reauthenticateWithCredential,
+  EmailAuthProvider
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCOBFWl24ZdvuFoS8hwZwiAg3CXsCPPVmQ",
+  authDomain: "qotoof-9121a.firebaseapp.com",
+  projectId: "qotoof-9121a",
+  storageBucket: "qotoof-9121a.firebasestorage.app",
+  messagingSenderId: "180620304460",
+  appId: "1:180620304460:web:7fcb7741ca0997685d54e9",
+  measurementId: "G-P8F72XB8J9"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// كاش بسيط لبيانات المستخدم الحالي (بيتحدث من Firebase نفسه، مش من المتصفح)
+let currentUserData = null;
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    let gender = '';
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists()) gender = snap.data().gender || '';
+    } catch (e) {
+      console.error('تعذر تحميل بيانات إضافية:', e);
+    }
+    currentUserData = {
+      name: user.displayName || '',
+      email: user.email || '',
+      gender
+    };
+  } else {
+    currentUserData = null;
+  }
+  updateAuthButton();
+  if (document.getElementById('savedContent')) renderSavedPage();
+});
+
+function mapFirebaseError(err) {
+  const code = err && err.code;
+  switch (code) {
+    case 'auth/email-already-in-use': return 'الإيميل ده متسجل قبل كده';
+    case 'auth/invalid-email': return 'الإيميل مش صحيح';
+    case 'auth/weak-password': return 'كلمة السر ضعيفة، لازم تكون 6 حروف على الأقل';
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential': return 'الإيميل أو كلمة السر غلط';
+    case 'auth/too-many-requests': return 'محاولات كتير غلط، جرب تاني بعد شوية';
+    case 'auth/requires-recent-login': return 'برجاء إدخال كلمة السر الحالية الصح للتأكيد';
+    default: return 'حصل خطأ، حاول تاني';
+  }
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isLoggedIn() {
+  return !!auth.currentUser;
+}
+
+// ===== المنتجات المحفوظة (Wishlist محلي، مش حساس أمنيًا) =====
+
 function filterProducts(type) {
   const products = document.querySelectorAll('.product');
   products.forEach(p => {
@@ -35,7 +129,7 @@ function renderSavedPage() {
   const container = document.getElementById('savedContent');
   if (!container) return;
 
-  if (!isLoggedIn()) {
+  if (!currentUserData) {
     container.innerHTML = `
       <p style="margin-bottom:14px;">سجّل دخولك الأول عشان تقدر تشوف منتجاتك المحفوظة</p>
       <button class="auth-option-btn" style="max-width:220px;margin:0 auto;" onclick="openAuthModal()">تسجيل الدخول</button>
@@ -43,22 +137,17 @@ function renderSavedPage() {
     return;
   }
 
-  const currentUser = localStorage.getItem('qotoof_current_user') || '';
-  const accounts = getAccounts();
-  const account = accounts[currentUser];
+  const genderLabel = currentUserData.gender === 'female' ? 'أنثى' : 'ذكر';
+  const safeName = escapeHtml(currentUserData.name);
+  const safeEmail = escapeHtml(currentUserData.email);
 
-  let profileHtml = '';
-  if (account) {
-    const genderLabel = account.gender === 'female' ? 'أنثى' : 'ذكر';
-    profileHtml = `
-      <div style="text-align:center;margin-bottom:25px;">
-        ${account.photo ? `<img src="${account.photo}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">` : ''}
-        <h3 style="margin:10px 0 4px;">مرحبًا ${currentUser}</h3>
-        <p style="margin:2px 0;font-weight:normal;">${account.email}</p>
-        <p style="margin:2px 0;font-weight:normal;">${genderLabel}</p>
-      </div>
-    `;
-  }
+  let profileHtml = `
+    <div style="text-align:center;margin-bottom:25px;">
+      <h3 style="margin:10px 0 4px;">مرحبًا ${safeName}</h3>
+      <p style="margin:2px 0;font-weight:normal;">${safeEmail}</p>
+      <p style="margin:2px 0;font-weight:normal;">${genderLabel}</p>
+    </div>
+  `;
 
   const savedCodes = getSavedCodes();
   const savedProducts = PRODUCTS.filter(p => savedCodes.includes(p.code));
@@ -87,108 +176,6 @@ function removeFromSaved(code) {
   saved = saved.filter(c => c !== code);
   localStorage.setItem('qotoof_saved', JSON.stringify(saved));
   renderSavedPage();
-}
-
-function getAccounts() {
-  return JSON.parse(localStorage.getItem('qotoof_accounts') || '{}');
-}
-
-function saveAccounts(accounts) {
-  localStorage.setItem('qotoof_accounts', JSON.stringify(accounts));
-}
-
-function handleSignup(event) {
-  event.preventDefault();
-
-  const name = document.getElementById('signupName').value.trim();
-  const email = document.getElementById('signupEmail').value.trim();
-  const password = document.getElementById('signupPassword').value;
-  const gender = document.getElementById('signupGender').value;
-  const photoInput = document.getElementById('signupPhoto');
-  const errorEl = document.getElementById('signupError');
-
-  if (!name || !email || !password) {
-    errorEl.textContent = 'برجاء ملء كل الحقول';
-    errorEl.style.display = 'block';
-    return;
-  }
-
-  const accounts = getAccounts();
-
-  if (accounts[name]) {
-    errorEl.textContent = 'الاسم ده متسجل قبل كده، جرب اسم تاني أو سجّل دخول';
-    errorEl.style.display = 'block';
-    return;
-  }
-
-  function finishSignup(photoData) {
-    accounts[name] = { email, password, gender, photo: photoData || '' };
-    saveAccounts(accounts);
-
-    localStorage.setItem('qotoof_logged_in', 'true');
-    localStorage.setItem('qotoof_current_user', name);
-
-    location.href = 'index.html';
-  }
-
-  const file = photoInput.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      finishSignup(e.target.result);
-    };
-    reader.readAsDataURL(file);
-  } else {
-    finishSignup('');
-  }
-}
-
-function handleLogin(event) {
-  event.preventDefault();
-
-  const name = document.getElementById('loginName').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const errorEl = document.getElementById('loginError');
-
-  const accounts = getAccounts();
-
-  if (!accounts[name] || accounts[name].password !== password) {
-    errorEl.textContent = 'الاسم أو كلمة السر غلط';
-    errorEl.style.display = 'block';
-    return;
-  }
-
-  localStorage.setItem('qotoof_logged_in', 'true');
-  localStorage.setItem('qotoof_current_user', name);
-
-  location.href = 'index.html';
-}
-
-function toggleMenu() {
-  document.getElementById('topButtons').classList.toggle('active');
-}
-
-function updateAuthButton() {
-  const btn = document.getElementById('authNavBtn');
-  if (!btn) return;
-
-  if (isLoggedIn()) {
-    btn.textContent = 'تسجيل خروج';
-    btn.onclick = logout;
-  } else {
-    btn.textContent = 'تسجيل الدخول';
-    btn.onclick = openAuthModal;
-  }
-}
-
-function logout() {
-  localStorage.removeItem('qotoof_logged_in');
-  localStorage.removeItem('qotoof_current_user');
-  location.href = 'index.html';
-}
-
-function isLoggedIn() {
-  return localStorage.getItem('qotoof_logged_in') === 'true';
 }
 
 function syncSavedHearts() {
@@ -222,6 +209,269 @@ function toggleSave(btn) {
 
   localStorage.setItem('qotoof_saved', JSON.stringify(saved));
 }
+
+// ===== تسجيل الدخول / حساب جديد (Firebase Authentication) =====
+
+async function handleSignup(event) {
+  event.preventDefault();
+
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  const gender = document.getElementById('signupGender').value;
+  const errorEl = document.getElementById('signupError');
+  errorEl.style.display = 'none';
+
+  if (!name || !email || !password) {
+    errorEl.textContent = 'برجاء ملء كل الحقول';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (name.length > 40) {
+    errorEl.textContent = 'الاسم طويل جدًا';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!isValidEmail(email)) {
+    errorEl.textContent = 'برجاء إدخال إيميل صحيح';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (password.length < 6) {
+    errorEl.textContent = 'كلمة السر لازم تكون 6 حروف على الأقل';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(cred.user, { displayName: name });
+    await setDoc(doc(db, 'users', cred.user.uid), { gender });
+    location.href = 'index.html';
+  } catch (err) {
+    errorEl.textContent = mapFirebaseError(err);
+    errorEl.style.display = 'block';
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errorEl = document.getElementById('loginError');
+  errorEl.style.display = 'none';
+
+  if (!email || !password) {
+    errorEl.textContent = 'برجاء ملء كل الحقول';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    location.href = 'index.html';
+  } catch (err) {
+    errorEl.textContent = mapFirebaseError(err);
+    errorEl.style.display = 'block';
+  }
+}
+
+async function logout() {
+  await signOut(auth);
+  location.href = 'index.html';
+}
+
+// ===== نسيت كلمة السر =====
+
+function openForgotModal() {
+  closeAuthModal();
+  const msgEl = document.getElementById('forgotMsg');
+  if (msgEl) msgEl.style.display = 'none';
+  const modal = document.getElementById('forgotModal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeForgotModal() {
+  const modal = document.getElementById('forgotModal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function handleForgotPassword(event) {
+  event.preventDefault();
+  const email = document.getElementById('forgotEmail').value.trim();
+  const msgEl = document.getElementById('forgotMsg');
+
+  if (!isValidEmail(email)) {
+    msgEl.textContent = 'برجاء إدخال إيميل صحيح';
+    msgEl.style.color = '#dc3545';
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    msgEl.textContent = 'اتبعت لينك إعادة تعيين كلمة السر على إيميلك، افتح صندوق الوارد (وتحقق من الـ Spam)';
+    msgEl.style.color = '#25D366';
+    msgEl.style.display = 'block';
+  } catch (err) {
+    msgEl.textContent = mapFirebaseError(err);
+    msgEl.style.color = '#dc3545';
+    msgEl.style.display = 'block';
+  }
+}
+
+// ===== واجهة تسجيل الدخول في الهيدر =====
+
+function toggleMenu() {
+  document.getElementById('topButtons').classList.toggle('active');
+}
+
+function updateAuthButton() {
+  const area = document.getElementById('authNavArea');
+  const loginBtn = document.getElementById('loginBtnStatic');
+
+  if (currentUserData) {
+    const initial = (currentUserData.name || currentUserData.email || '؟').trim().charAt(0).toUpperCase();
+    const safeName = escapeHtml(currentUserData.name || '');
+    const safeEmail = escapeHtml(currentUserData.email || '');
+    const safeInitial = escapeHtml(initial);
+
+    if (area) {
+      area.style.display = 'flex';
+      area.innerHTML = `
+        <div class="user-menu">
+          <button class="user-avatar-btn" onclick="toggleUserMenu()">${safeInitial}</button>
+          <div class="user-dropdown" id="userDropdown">
+            <p class="user-dropdown-name">${safeName}</p>
+            <p class="user-dropdown-email">${safeEmail}</p>
+            <button class="auth-option-btn" onclick="openEditModal()">تعديل البيانات</button>
+            <button class="auth-option-btn secondary" onclick="logout()">تسجيل خروج</button>
+          </div>
+        </div>
+      `;
+    }
+    if (loginBtn) loginBtn.style.display = 'none';
+  } else {
+    if (area) {
+      area.innerHTML = '';
+      area.style.display = 'none';
+    }
+    if (loginBtn) loginBtn.style.display = '';
+  }
+}
+
+function toggleUserMenu() {
+  const dropdown = document.getElementById('userDropdown');
+  if (dropdown) dropdown.classList.toggle('active');
+}
+
+document.addEventListener('click', function (e) {
+  const menu = document.querySelector('.user-menu');
+  const dropdown = document.getElementById('userDropdown');
+  if (dropdown && dropdown.classList.contains('active')) {
+    if (menu && !menu.contains(e.target)) {
+      dropdown.classList.remove('active');
+    }
+  }
+});
+
+// ===== تعديل بيانات الحساب =====
+
+function openEditModal() {
+  if (!currentUserData) return;
+
+  document.getElementById('editName').value = currentUserData.name;
+  document.getElementById('editEmail').value = currentUserData.email;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('editCurrentPassword').value = '';
+
+  const errorEl = document.getElementById('editError');
+  if (errorEl) errorEl.style.display = 'none';
+
+  toggleUserMenu();
+  document.getElementById('editModal').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('active');
+}
+
+async function handleEditSave(event) {
+  event.preventDefault();
+
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const newName = document.getElementById('editName').value.trim();
+  const newEmail = document.getElementById('editEmail').value.trim();
+  const newPassword = document.getElementById('editPassword').value;
+  const currentPassword = document.getElementById('editCurrentPassword').value;
+  const errorEl = document.getElementById('editError');
+  errorEl.style.display = 'none';
+
+  if (!newName || !newEmail) {
+    errorEl.textContent = 'برجاء ملء الاسم والإيميل';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (newName.length > 40) {
+    errorEl.textContent = 'الاسم طويل جدًا';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!isValidEmail(newEmail)) {
+    errorEl.textContent = 'برجاء إدخال إيميل صحيح';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (newPassword && newPassword.length < 6) {
+    errorEl.textContent = 'كلمة السر لازم تكون 6 حروف على الأقل';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  const emailChanged = newEmail !== user.email;
+  const passwordChanged = !!newPassword;
+
+  if ((emailChanged || passwordChanged) && !currentPassword) {
+    errorEl.textContent = 'برجاء إدخال كلمة السر الحالية للتأكيد على أي تعديل حساس';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    if (emailChanged || passwordChanged) {
+      const cred = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, cred);
+    }
+
+    if (newName !== user.displayName) {
+      await updateProfile(user, { displayName: newName });
+    }
+    if (emailChanged) {
+      await updateEmail(user, newEmail);
+    }
+    if (passwordChanged) {
+      await updatePassword(user, newPassword);
+    }
+
+    currentUserData = {
+      name: newName,
+      email: newEmail,
+      gender: currentUserData ? currentUserData.gender : ''
+    };
+
+    closeEditModal();
+    updateAuthButton();
+    if (document.getElementById('savedContent')) renderSavedPage();
+  } catch (err) {
+    errorEl.textContent = mapFirebaseError(err);
+    errorEl.style.display = 'block';
+  }
+}
+
+// ===== نوافذ عامة =====
 
 function openAuthModal() {
   document.getElementById('authModal').classList.add('active');
@@ -263,3 +513,32 @@ function order(code, type, sizeId) {
 
   window.open("https://wa.me/201145587547?text=" + encodeURIComponent(msg), "_blank");
 }
+
+// ===== تشغيل أولي (الصفحة module، فمحتاجين نستدعي بأنفسنا) =====
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.querySelector('.product')) syncSavedHearts();
+  if (document.getElementById('savedContent')) renderSavedPage();
+  updateAuthButton();
+});
+
+// ===== إتاحة الفانكشنز للـ onclick في الـ HTML (الملف ده module الآن) =====
+window.filterProducts = filterProducts;
+window.toggleSave = toggleSave;
+window.removeFromSaved = removeFromSaved;
+window.handleSignup = handleSignup;
+window.handleLogin = handleLogin;
+window.logout = logout;
+window.toggleMenu = toggleMenu;
+window.toggleUserMenu = toggleUserMenu;
+window.openEditModal = openEditModal;
+window.closeEditModal = closeEditModal;
+window.handleEditSave = handleEditSave;
+window.openAuthModal = openAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.showDetails = showDetails;
+window.closeDetails = closeDetails;
+window.order = order;
+window.openForgotModal = openForgotModal;
+window.closeForgotModal = closeForgotModal;
+window.handleForgotPassword = handleForgotPassword;
